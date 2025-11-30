@@ -1,0 +1,8 @@
+syntax = "proto3";
+package gossip;
+
+message Gossip {
+  bytes tree_head = 1;
+  bytes origin_id = 2;
+  repeated bytes consistency_proof = 3;
+}
