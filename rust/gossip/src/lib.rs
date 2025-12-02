@@ -1,7 +1,8 @@
 use libsignal_keytrans::{
-    FullTreeHead
+    FullTreeHead, LastTreeHead, KeyTransparency, TreeHead, TreeRoot
 };
 use prost::Message;
+use std::time::SystemTime;
 
 pub mod proto {
     tonic::include_proto!("gossip");
@@ -15,19 +16,19 @@ pub enum GossipError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gossip {
-    pub tree_head : FullTreeHead,    
+    pub full_tree_head : FullTreeHead,    
     pub origin_id : Vec<u8>, // who originated this gossip
     pub consistency_proof: Vec<Vec<u8>>,
 }
 
 impl Gossip {
     pub fn new(
-        tree_head: FullTreeHead,
+        full_tree_head: FullTreeHead,
         origin_id: Vec<u8>,
         consistency_proof: Vec<Vec<u8>>
     ) -> Self {
         Self {
-            tree_head,
+            full_tree_head,
             origin_id,
             consistency_proof
         }
@@ -35,12 +36,12 @@ impl Gossip {
 
     pub fn encode(&self) -> Result<Vec<u8>, GossipError> {
         let mut th_bytes = Vec::new();
-        self.tree_head
+        self.full_tree_head
             .encode(&mut th_bytes)
             .map_err(|_| GossipError::Invalid)?;
 
         let proto = proto::Gossip {
-            tree_head: th_bytes,
+            full_tree_head: th_bytes,
             origin_id: self.origin_id.clone(),
             consistency_proof: self.consistency_proof.clone(),
         };
@@ -55,14 +56,30 @@ impl Gossip {
     pub fn decode(data: &[u8]) -> Result<Self, GossipError> {
         let proto: proto::Gossip = proto::Gossip::decode(data).map_err(|_| GossipError::Invalid)?;
 
-        let tree_head =
-            FullTreeHead::decode(proto.tree_head.as_slice()).map_err(|_| GossipError::Invalid)?;
+        let full_tree_head =
+            FullTreeHead::decode(proto.full_tree_head.as_slice()).map_err(|_| GossipError::Invalid)?;
 
         Ok(Self {
-            tree_head,
+            full_tree_head,
             origin_id: proto.origin_id,
             consistency_proof: proto.consistency_proof,
         })
+    }
+
+    pub fn verify(
+        &self,
+        kt: Option<&KeyTransparency>,
+        last_tree_head: &LastTreeHead,
+        last_distinguished: Option<&LastTreeHead>,
+    ) -> Result<(), GossipError> {
+        if let (Some(kt), Some(last_distinguished_)) = (kt, last_distinguished) {
+            kt.verify_distinguished(
+                &self.full_tree_head,
+                Some(last_tree_head),
+                last_distinguished_
+            ).map_err(|_| GossipError::Inconsistent)?;
+        }
+        Ok(())
     }
 }
 
@@ -126,32 +143,32 @@ mod tests {
         }
         
         assert_eq!(
-            decoded_gossip.tree_head.tree_head.as_ref().unwrap().tree_size,
-            original_gossip.tree_head.tree_head.as_ref().unwrap().tree_size,
+            decoded_gossip.full_tree_head.tree_head.as_ref().unwrap().tree_size,
+            original_gossip.full_tree_head.tree_head.as_ref().unwrap().tree_size,
             "tree_size should match"
         );
         assert_eq!(
-            decoded_gossip.tree_head.tree_head.as_ref().unwrap().timestamp,
-            original_gossip.tree_head.tree_head.as_ref().unwrap().timestamp,
+            decoded_gossip.full_tree_head.tree_head.as_ref().unwrap().timestamp,
+            original_gossip.full_tree_head.tree_head.as_ref().unwrap().timestamp,
             "timestamp should match"
         );
         assert_eq!(
-            decoded_gossip.tree_head.last.len(),
-            original_gossip.tree_head.last.len(),
+            decoded_gossip.full_tree_head.last.len(),
+            original_gossip.full_tree_head.last.len(),
             "last length should match"
         );
-        for (i, (decoded, original)) in decoded_gossip.tree_head.last.iter()
-            .zip(original_gossip.tree_head.last.iter()).enumerate() {
+        for (i, (decoded, original)) in decoded_gossip.full_tree_head.last.iter()
+            .zip(original_gossip.full_tree_head.last.iter()).enumerate() {
             assert_eq!(decoded, original, "last element {} should match", i);
         }
-        
+
         assert_eq!(
-            decoded_gossip.tree_head.distinguished.len(),
-            original_gossip.tree_head.distinguished.len(),
+            decoded_gossip.full_tree_head.distinguished.len(),
+            original_gossip.full_tree_head.distinguished.len(),
             "distinguished length should match"
         );
-        for (i, (decoded, original)) in decoded_gossip.tree_head.distinguished.iter()
-            .zip(original_gossip.tree_head.distinguished.iter()).enumerate() {
+        for (i, (decoded, original)) in decoded_gossip.full_tree_head.distinguished.iter()
+            .zip(original_gossip.full_tree_head.distinguished.iter()).enumerate() {
             assert_eq!(decoded, original, "distinguished element {} should match", i);
         }
 
@@ -161,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_encoding_empty_data() {
-        let tree_head = FullTreeHead {
+        let full_tree_head = FullTreeHead {
             tree_head: Some(TreeHead {
                 tree_size: 0,
                 timestamp: 0,
@@ -171,7 +188,7 @@ mod tests {
             distinguished: vec![],
             full_auditor_tree_heads: vec![],
         };
-        let gossip = Gossip::new(tree_head, vec![], vec![]);
+        let gossip = Gossip::new(full_tree_head, vec![], vec![]);
 
         let encoded = gossip.encode().expect("encoding empty data should succeed");
         let decoded = Gossip::decode(&encoded).expect("decoding empty data should succeed");
@@ -179,7 +196,7 @@ mod tests {
         assert_eq!(decoded.origin_id.len(), 0, "empty origin_id should have length 0");
         assert_eq!(decoded.consistency_proof.len(), 0, "empty consistency_proof should have length 0");
         assert_eq!(
-            decoded.tree_head.tree_head.as_ref().unwrap().tree_size,
+            decoded.full_tree_head.tree_head.as_ref().unwrap().tree_size,
             0,
             "empty tree_size should be 0"
         );
