@@ -1,13 +1,17 @@
 [package]
-name = "gossip"
+name = "libsignal-gossip"
 edition = "2024"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 libsignal-keytrans = { workspace = true }
+libsignal-protocol.workspace = true
 
 prost = { workspace = true }
 tonic = { workspace = true, default-features = false, features = ["codegen", "prost"] }
@@ -15,6 +19,3 @@ tonic = { workspace = true, default-features = false, features = ["codegen", "pr
 [build-dependencies]
 prost-build = { workspace = true }
 tonic-build = { workspace = true }
-
-[lints]
-workspace = true

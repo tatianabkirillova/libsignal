@@ -1,9 +1,11 @@
 use libsignal_keytrans::{
-    FullTreeHead, LastTreeHead, KeyTransparency, TreeHead, TreeRoot
+    FullTreeHead, LastTreeHead, KeyTransparency
+};
+use libsignal_protocol::{
+    SignalMessage
 };
 use prost::Message;
-use std::time::SystemTime;
-
+// use std::time::SystemTime;
 pub mod proto {
     tonic::include_proto!("gossip");
 }
@@ -80,6 +82,52 @@ impl Gossip {
             ).map_err(|_| GossipError::Inconsistent)?;
         }
         Ok(())
+    }
+}
+
+pub trait GossipStorage {
+    fn load_full_tree_head(&self, kt: &KeyTransparency) -> Option<FullTreeHead>;
+    fn save_full_tree_head(&mut self, kt: &KeyTransparency, head: &FullTreeHead);
+}
+
+pub struct Gossiper<S: GossipStorage> {
+    storage: S,
+    kt: Option<KeyTransparency>,
+}
+
+impl<S: GossipStorage> Gossiper<S> {
+    pub fn new(
+        storage: S, 
+        kt: Option<KeyTransparency>
+    ) -> Self {
+        Self {
+            storage,
+            kt,
+        }
+    }
+
+    pub fn append_gossip(
+        &self,
+        mut message: SignalMessage, 
+        origin_id: Vec<u8>,
+    ) -> SignalMessage {
+    
+        let full = match self.storage.load_full_tree_head(&self.kt.as_ref().unwrap()) {
+            Some(f) => f,
+            None => return message, 
+        };
+
+        let consistency_proof = Vec::new();
+
+        let gossip = Gossip::new(full, origin_id, consistency_proof);
+
+        match gossip.encode() {
+            Ok(bytes) => {
+                // append bytes
+                message
+            }
+            Err(_) => message, 
+        }
     }
 }
 
