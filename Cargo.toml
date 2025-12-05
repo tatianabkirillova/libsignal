@@ -20,7 +20,7 @@ members = [
     "rust/bridge/jni",
     "rust/bridge/jni/impl",
     "rust/bridge/jni/testing",
-    "rust/bridge/node",
+    "rust/bridge/node", "rust/gossip",
 ]
 default-members = [
     "rust/crypto",
@@ -60,6 +60,7 @@ device-transfer = { path = "rust/device-transfer" }
 libsignal-account-keys = { path = "rust/account-keys" }
 libsignal-cli-utils = { path = "rust/cli-utils" }
 libsignal-core = { path = "rust/core" }
+libsignal-gossip = { path = "rust/gossip" }
 libsignal-keytrans = { path = "rust/keytrans" }
 libsignal-message-backup = { path = "rust/message-backup" }
 libsignal-net = { path = "rust/net" }

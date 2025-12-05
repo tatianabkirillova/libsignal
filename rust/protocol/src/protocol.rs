@@ -15,6 +15,8 @@ use crate::{
     IdentityKey, PrivateKey, PublicKey, Result, SignalProtocolError, Timestamp, kem, proto,
 };
 
+// pub use libsignal_gossip::{Gossip, GossipError, GossipStorage, Gossiper};
+
 pub(crate) const CIPHERTEXT_MESSAGE_CURRENT_VERSION: u8 = 4;
 // Backward compatible, lacking Kyber keys, version
 pub(crate) const CIPHERTEXT_MESSAGE_PRE_KYBER_VERSION: u8 = 3;
@@ -67,6 +69,7 @@ pub struct SignalMessage {
     previous_counter: u32,
     ciphertext: Box<[u8]>,
     pq_ratchet: spqr::SerializedState,
+    gossip: Box<[u8]>,
     serialized: Box<[u8]>,
 }
 
@@ -95,6 +98,7 @@ impl SignalMessage {
             } else {
                 Some(pq_ratchet.to_vec())
             },
+            gossip: None,
         };
         let mut serialized = Vec::with_capacity(1 + message.encoded_len() + Self::MAC_LENGTH);
         serialized.push(((message_version & 0xF) << 4) | CIPHERTEXT_MESSAGE_CURRENT_VERSION);
@@ -116,6 +120,57 @@ impl SignalMessage {
             previous_counter,
             ciphertext: ciphertext.into(),
             pq_ratchet: pq_ratchet.to_vec(),
+            gossip: Box::from(&[][..]), // Empty gossip for backward compatibility
+            serialized,
+        })
+    }
+
+        #[allow(clippy::too_many_arguments)]
+    pub fn new_with_gossip(
+        message_version: u8,
+        mac_key: &[u8],
+        sender_ratchet_key: PublicKey,
+        counter: u32,
+        previous_counter: u32,
+        ciphertext: &[u8],
+        sender_identity_key: &IdentityKey,
+        receiver_identity_key: &IdentityKey,
+        pq_ratchet: &[u8],
+        gossip: &[u8],
+    ) -> Result<Self> {
+        let message = proto::wire::SignalMessage {
+            ratchet_key: Some(sender_ratchet_key.serialize().into_vec()),
+            counter: Some(counter),
+            previous_counter: Some(previous_counter),
+            ciphertext: Some(Vec::<u8>::from(ciphertext)),
+            pq_ratchet: if pq_ratchet.is_empty() {
+                None
+            } else {
+                Some(pq_ratchet.to_vec())
+            },
+            gossip: Some(gossip.to_vec()),
+        };
+        let mut serialized = Vec::with_capacity(1 + message.encoded_len() + Self::MAC_LENGTH);
+        serialized.push(((message_version & 0xF) << 4) | CIPHERTEXT_MESSAGE_CURRENT_VERSION);
+        message
+            .encode(&mut serialized)
+            .expect("can always append to a buffer");
+        let mac = Self::compute_mac(
+            sender_identity_key,
+            receiver_identity_key,
+            mac_key,
+            &serialized,
+        )?;
+        serialized.extend_from_slice(&mac);
+        let serialized = serialized.into_boxed_slice();
+        Ok(Self {
+            message_version,
+            sender_ratchet_key,
+            counter,
+            previous_counter,
+            ciphertext: ciphertext.into(),
+            pq_ratchet: pq_ratchet.to_vec(),
+            gossip: gossip.into(),
             serialized,
         })
     }
@@ -138,6 +193,11 @@ impl SignalMessage {
     #[inline]
     pub fn pq_ratchet(&self) -> &spqr::SerializedMessage {
         &self.pq_ratchet
+    }
+
+    #[inline]
+    pub fn gossip(&self) -> &[u8] {
+        &self.gossip
     }
 
     #[inline]
@@ -245,6 +305,7 @@ impl TryFrom<&[u8]> for SignalMessage {
             previous_counter,
             ciphertext,
             pq_ratchet: proto_structure.pq_ratchet.unwrap_or(vec![]),
+            gossip: proto_structure.gossip.unwrap_or_default().into_boxed_slice(),
             serialized: Box::from(value),
         })
     }

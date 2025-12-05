@@ -2495,6 +2495,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsignal-gossip"
+version = "0.86.5"
+dependencies = [
+ "libsignal-keytrans",
+ "prost",
+ "prost-build",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "libsignal-jni"
 version = "0.86.5"
 dependencies = [
@@ -2865,6 +2876,7 @@ dependencies = [
  "itertools 0.14.0",
  "libcrux-ml-kem",
  "libsignal-core",
+ "libsignal-gossip",
  "log",
  "proptest",
  "prost",

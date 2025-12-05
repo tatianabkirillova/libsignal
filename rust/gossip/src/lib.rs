@@ -1,9 +1,6 @@
 use libsignal_keytrans::{
     FullTreeHead, LastTreeHead, KeyTransparency
 };
-use libsignal_protocol::{
-    SignalMessage
-};
 use prost::Message;
 // use std::time::SystemTime;
 pub mod proto {
@@ -108,10 +105,9 @@ impl<S: GossipStorage> Gossiper<S> {
 
     pub fn append_gossip(
         &self,
-        mut message: SignalMessage, 
+        mut message: Vec<u8>, 
         origin_id: Vec<u8>,
-    ) -> SignalMessage {
-    
+    ) -> Vec<u8> {
         let full = match self.storage.load_full_tree_head(&self.kt.as_ref().unwrap()) {
             Some(f) => f,
             None => return message, 
@@ -122,8 +118,8 @@ impl<S: GossipStorage> Gossiper<S> {
         let gossip = Gossip::new(full, origin_id, consistency_proof);
 
         match gossip.encode() {
-            Ok(bytes) => {
-                // append bytes
+            Ok(gossip_bytes) => {
+                message.extend(gossip_bytes);
                 message
             }
             Err(_) => message, 

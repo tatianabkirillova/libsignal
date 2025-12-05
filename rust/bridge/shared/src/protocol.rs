@@ -380,6 +380,34 @@ fn SignalMessage_New(
     )
 }
 
+#[bridge_fn(ffi = "message_new_with_gossip")]
+#[allow(clippy::too_many_arguments)]
+fn SignalMessage_New_WithGossip(
+    message_version: u8,
+    mac_key: &[u8],
+    sender_ratchet_key: &PublicKey,
+    counter: u32,
+    previous_counter: u32,
+    ciphertext: &[u8],
+    sender_identity_key: &PublicKey,
+    receiver_identity_key: &PublicKey,
+    pq_ratchet: &[u8],
+    gossip: &[u8],
+) -> Result<SignalMessage> {
+    SignalMessage::new_with_gossip(
+        message_version,
+        mac_key,
+        *sender_ratchet_key,
+        counter,
+        previous_counter,
+        ciphertext,
+        &IdentityKey::new(*sender_identity_key),
+        &IdentityKey::new(*receiver_identity_key),
+        pq_ratchet,
+        gossip,
+    )
+}
+
 #[bridge_fn(ffi = "message_verify_mac")]
 fn SignalMessage_VerifyMac(
     msg: &SignalMessage,
