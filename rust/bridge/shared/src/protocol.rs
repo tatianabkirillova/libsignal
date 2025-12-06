@@ -12,6 +12,7 @@ use libsignal_bridge_types::jni;
 use libsignal_core::InvalidDeviceId;
 use libsignal_protocol::error::Result;
 use libsignal_protocol::*;
+use libsignal_gossip::*;
 use rand::TryRngCore as _;
 use static_assertions::const_assert_eq;
 use uuid::Uuid;
@@ -1083,6 +1084,29 @@ async fn SessionCipher_EncryptMessage(
     .await
 }
 
+#[bridge_fn(ffi = "encrypt_message_with_gossip")]
+async fn SessionCipher_EncryptMessageWithGossip(
+    ptext: &[u8],
+    protocol_address: &ProtocolAddress,
+    session_store: &mut dyn SessionStore,
+    identity_key_store: &mut dyn IdentityKeyStore,
+    now: Timestamp,
+) -> Result<CiphertextMessage> {
+    let mut csprng = rand::rngs::OsRng.unwrap_err();
+
+    // ptext_with_gossip 
+
+    message_encrypt(
+        ptext,
+        protocol_address,
+        session_store,
+        identity_key_store,
+        now.into(),
+        &mut csprng,
+    )
+    .await
+}
+
 #[bridge_fn(ffi = "decrypt_message")]
 async fn SessionCipher_DecryptSignalMessage(
     message: &SignalMessage,
@@ -1099,6 +1123,26 @@ async fn SessionCipher_DecryptSignalMessage(
         &mut csprng,
     )
     .await
+}
+
+#[bridge_fn(ffi = "decrypt_message_with_gossip")]
+async fn SessionCipher_DecryptSignalMessageWithGossip(
+    message: &SignalMessage,
+    protocol_address: &ProtocolAddress,
+    session_store: &mut dyn SessionStore,
+    identity_key_store: &mut dyn IdentityKeyStore,
+) -> Result<Vec<u8>> {
+    let mut csprng = rand::rngs::OsRng.unwrap_err();
+    message_decrypt_signal(
+        message,
+        protocol_address,
+        session_store,
+        identity_key_store,
+        &mut csprng,
+    )
+    .await
+
+    // decode_and_verify
 }
 
 #[bridge_fn(ffi = "decrypt_pre_key_message")]
