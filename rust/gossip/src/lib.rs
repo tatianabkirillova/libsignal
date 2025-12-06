@@ -9,6 +9,11 @@ pub mod proto {
     tonic::include_proto!("gossip");
 }
 
+pub struct Gossiper {
+    storage: GossipStorage,
+    kt: Option<KeyTransparency>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum GossipError {
     Invalid,
@@ -20,6 +25,41 @@ pub struct Gossip {
     pub full_tree_head : FullTreeHead,    
     pub origin_id : Vec<u8>, // who originated this gossip
     pub consistency_proof: Vec<Vec<u8>>,
+}
+
+pub struct GossipStorage {
+    head: Option<FullTreeHead>,
+}
+
+static GLOBAL_GOSSIP_STORAGE: Lazy<Mutex<GossipStorage>> = Lazy::new(|| {
+    Mutex::new(GossipStorage::new())
+});
+
+static GLOBAL_GOSSIPER: Lazy<Mutex<Option<Gossiper>>> = Lazy::new(|| {
+    Mutex::new(None)
+});
+
+pub fn init_gossiper(kt: KeyTransparency) {
+    let mut guard = GLOBAL_GOSSIPER
+        .lock()
+        .expect("GLOBAL_GOSSIPER lock");
+    if guard.is_none() {
+        let storage = GossipStorage::new();
+        *guard = Some(Gossiper::new(storage, Some(kt)));
+    }
+}
+
+/*
+Usage:
+init_gossiper(kt_config);
+if let Some(g) = gossiper().as_ref() {
+    let msg_with_gossip = g.append_gossip(message_bytes, origin_id);
+}
+*/
+pub fn gossiper() -> std::sync::MutexGuard<'static, Option<Gossiper>> {
+    GLOBAL_GOSSIPER
+        .lock()
+        .expect("GLOBAL_GOSSIPER lock")
 }
 
 impl Gossip {
@@ -84,19 +124,31 @@ impl Gossip {
     }
 }
 
-pub trait GossipStorage {
-    fn load_full_tree_head(&self, kt: &KeyTransparency) -> Option<FullTreeHead>;
-    fn save_full_tree_head(&mut self, kt: &KeyTransparency, head: &FullTreeHead);
+
+// usage: gossip_storage().save_full_tree_head(&kt, &full_head);
+impl GossipStorage {
+    pub fn new() -> Self {
+        Self {
+            head: None,
+        }
+    }
+
+    fn load_full_tree_head(&self, _kt: &KeyTransparency) -> Option<FullTreeHead> {
+        self.head.clone()
+    }
+
+    fn save_full_tree_head(&mut self, _kt: &KeyTransparency, head: &FullTreeHead) {
+        self.head = Some(head.clone());
+    }
 }
 
-pub struct Gossiper<S: GossipStorage> {
-    storage: S,
-    kt: Option<KeyTransparency>,
+pub fn gossip_storage() -> std::sync::MutexGuard<'static, GossipStorage> {
+    GLOBAL_GOSSIP_STORAGE.lock().expect("GLOBAL_GOSSIP_STORAGE lock")
 }
 
-impl<S: GossipStorage> Gossiper<S> {
+impl Gossiper {
     pub fn new(
-        storage: S, 
+        storage: GossipStorage,
         kt: Option<KeyTransparency>
     ) -> Self {
         Self {
@@ -110,22 +162,22 @@ impl<S: GossipStorage> Gossiper<S> {
         mut message: Vec<u8>, 
         origin_id: Vec<u8>,
     ) -> Vec<u8> {
-        let full = match self.storage.load_full_tree_head(&self.kt.as_ref().unwrap()) {
-            Some(f) => f,
-            None => return message, 
+        let kt = match &self.kt {
+            Some(k) => k,
+            None => return message,
         };
 
-        let consistency_proof = Vec::new();
+        let full = match self.storage.load_full_tree_head(kt) {
+            Some(f) => f,
+            None => return message,
+        };
 
-        let gossip = Gossip::new(full, origin_id, consistency_proof);
+        let gossip = Gossip::new(full, origin_id, Vec::new());
 
-        match gossip.encode() {
-            Ok(gossip_bytes) => {
-                message.extend(gossip_bytes);
-                message
-            }
-            Err(_) => message, 
+        if let Ok(gossip_bytes) = gossip.encode() {
+            message.extend(gossip_bytes);
         }
+        message
     }
 }
 
