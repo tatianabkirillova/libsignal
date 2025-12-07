@@ -74,6 +74,7 @@ pub use sender_keys::SenderKeyRecord;
 pub use session::{process_prekey, process_prekey_bundle};
 pub use session_cipher::{
     message_decrypt, message_decrypt_prekey, message_decrypt_signal, message_encrypt,
+    message_encrypt_with_gossip,
 };
 pub use state::{
     GenericSignedPreKey, KyberPreKeyId, KyberPreKeyRecord, PreKeyBundle, PreKeyBundleContent,
