@@ -133,11 +133,11 @@ impl GossipStorage {
         }
     }
 
-    fn load_full_tree_head(&self, _kt: &KeyTransparency) -> Option<FullTreeHead> {
+    pub fn load_full_tree_head(&self, _kt: &KeyTransparency) -> Option<FullTreeHead> {
         self.head.clone()
     }
 
-    fn save_full_tree_head(&mut self, _kt: &KeyTransparency, head: &FullTreeHead) {
+    pub fn save_full_tree_head(&mut self, _kt: &KeyTransparency, head: &FullTreeHead) {
         self.head = Some(head.clone());
     }
 }
@@ -178,6 +178,20 @@ impl Gossiper {
             message.extend(gossip_bytes);
         }
         message
+    }
+
+    pub fn build_gossip(&self) -> Option<Gossip> {
+        let kt = match &self.kt {
+            Some(k) => k,
+            None => return None,
+        };
+
+        let full = match self.storage.load_full_tree_head(kt) {
+            Some(f) => f,
+            None => return None,
+        };
+
+        Some(Gossip::new(full, vec![], vec![]))
     }
 }
 

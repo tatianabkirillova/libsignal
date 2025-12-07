@@ -2311,6 +2311,7 @@ dependencies = [
  "libsignal-bridge-macros",
  "libsignal-bridge-types",
  "libsignal-core",
+ "libsignal-gossip",
  "libsignal-keytrans",
  "libsignal-message-backup",
  "libsignal-net",
@@ -2499,6 +2500,7 @@ name = "libsignal-gossip"
 version = "0.86.5"
 dependencies = [
  "libsignal-keytrans",
+ "once_cell",
  "prost",
  "prost-build",
  "tonic",

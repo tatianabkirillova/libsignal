@@ -1095,9 +1095,29 @@ async fn SessionCipher_EncryptMessageWithGossip(
     let mut csprng = rand::rngs::OsRng.unwrap_err();
 
     // ptext_with_gossip 
+    // decode ptext to SignalMessage
+    let mut signal_message = SignalMessage::try_from(ptext)?;
+
+    // create a new signal message with gossip (to not break the mac calculation)
+    let gossip = Gossiper::build_gossip()?;
+    SignalMessage::new_with_gossip(
+        signal_message.message_version(),
+        signal_message.mac_key(),
+        signal_message.sender_ratchet_key(),
+        signal_message.counter(),
+        signal_message.previous_counter(),
+        signal_message.body(),
+        signal_message.sender_identity_key(),
+        signal_message.receiver_identity_key(),
+        signal_message.pq_ratchet(),
+        &gossip,
+    );
+
+    // re-encode SignalMessage to ptext_with_gossip
+    let ptext_with_gossip = signal_message.encode();
 
     message_encrypt(
-        ptext,
+        &ptext_with_gossip,
         protocol_address,
         session_store,
         identity_key_store,
