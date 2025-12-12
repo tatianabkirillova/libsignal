@@ -3,6 +3,6 @@ package gossip;
 
 message Gossip {
   bytes full_tree_head = 1;
-  bytes origin_id = 2;
-  repeated bytes consistency_proof = 3;
+  bytes tree_root = 2;
+  int64 timestamp = 3;
 }

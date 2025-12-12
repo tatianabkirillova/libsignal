@@ -12,7 +12,7 @@ use libsignal_bridge_types::jni;
 use libsignal_core::InvalidDeviceId;
 use libsignal_protocol::error::Result;
 use libsignal_protocol::*;
-use libsignal_gossip::*;
+use libsignal_gossip::gossip_service::gossip_test;
 use rand::TryRngCore as _;
 use static_assertions::const_assert_eq;
 use uuid::Uuid;
@@ -1094,7 +1094,8 @@ async fn SessionCipher_EncryptMessageWithGossip(
 ) -> Result<CiphertextMessage> {
     let mut csprng = rand::rngs::OsRng.unwrap_err();
 
-    let gossip = b""; // empty gossip for now
+    let gossip = gossip_test::create_test_gossip();
+    let gossip_bytes = gossip.encode().unwrap_or_default();
     message_encrypt_with_gossip(
         ptext,
         protocol_address,
@@ -1102,7 +1103,7 @@ async fn SessionCipher_EncryptMessageWithGossip(
         identity_key_store,
         now.into(),
         &mut csprng,
-        gossip,
+        &gossip_bytes,
     )
     .await
 }
