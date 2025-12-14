@@ -339,41 +339,6 @@ pub async fn message_decrypt<R: Rng + CryptoRng>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn message_decrypt_with_gossip<R: Rng + CryptoRng>(
-    ciphertext: &CiphertextMessage,
-    remote_address: &ProtocolAddress,
-    session_store: &mut dyn SessionStore,
-    identity_store: &mut dyn IdentityKeyStore,
-    pre_key_store: &mut dyn PreKeyStore,
-    signed_pre_key_store: &dyn SignedPreKeyStore,
-    kyber_pre_key_store: &mut dyn KyberPreKeyStore,
-    csprng: &mut R,
-) -> Result<Vec<u8>> {
-    match ciphertext {
-        CiphertextMessage::SignalMessage(m) => {
-            message_decrypt_signal(m, remote_address, session_store, identity_store, csprng).await
-        }
-        CiphertextMessage::PreKeySignalMessage(m) => {
-            message_decrypt_prekey(
-                m,
-                remote_address,
-                session_store,
-                identity_store,
-                pre_key_store,
-                signed_pre_key_store,
-                kyber_pre_key_store,
-                csprng,
-            )
-            .await
-        }
-        _ => Err(SignalProtocolError::InvalidArgument(format!(
-            "message_decrypt cannot be used to decrypt {:?} messages",
-            ciphertext.message_type()
-        ))),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
 pub async fn message_decrypt_prekey<R: Rng + CryptoRng>(
     ciphertext: &PreKeySignalMessage,
     remote_address: &ProtocolAddress,
@@ -458,6 +423,59 @@ pub async fn message_decrypt_prekey<R: Rng + CryptoRng>(
 }
 
 pub async fn message_decrypt_signal<R: Rng + CryptoRng>(
+    ciphertext: &SignalMessage,
+    remote_address: &ProtocolAddress,
+    session_store: &mut dyn SessionStore,
+    identity_store: &mut dyn IdentityKeyStore,
+    csprng: &mut R,
+) -> Result<Vec<u8>> {
+    let mut session_record = session_store
+        .load_session(remote_address)
+        .await?
+        .ok_or_else(|| SignalProtocolError::SessionNotFound(remote_address.clone()))?;
+
+    let ptext = decrypt_message_with_record(
+        remote_address,
+        &mut session_record,
+        ciphertext,
+        CiphertextMessageType::Whisper,
+        csprng,
+    )?;
+
+    // Why are we performing this check after decryption instead of before?
+    let their_identity_key = session_record
+        .session_state()
+        .expect("successfully decrypted; must have a current state")
+        .remote_identity_key()
+        .expect("successfully decrypted; must have a remote identity key")
+        .expect("successfully decrypted; must have a remote identity key");
+
+    if !identity_store
+        .is_trusted_identity(remote_address, &their_identity_key, Direction::Receiving)
+        .await?
+    {
+        log::warn!(
+            "Identity key {} is not trusted for remote address {}",
+            hex::encode(their_identity_key.public_key().public_key_bytes()),
+            remote_address,
+        );
+        return Err(SignalProtocolError::UntrustedIdentity(
+            remote_address.clone(),
+        ));
+    }
+
+    identity_store
+        .save_identity(remote_address, &their_identity_key)
+        .await?;
+
+    session_store
+        .store_session(remote_address, &session_record)
+        .await?;
+
+    Ok(ptext)
+}
+
+pub async fn message_decrypt_signal_with_gossip<R: Rng + CryptoRng>(
     ciphertext: &SignalMessage,
     remote_address: &ProtocolAddress,
     session_store: &mut dyn SessionStore,

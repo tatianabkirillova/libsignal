@@ -1134,7 +1134,7 @@ async fn SessionCipher_DecryptSignalMessageWithGossip(
     identity_key_store: &mut dyn IdentityKeyStore,
 ) -> Result<Vec<u8>> {
     let mut csprng = rand::rngs::OsRng.unwrap_err();
-    message_decrypt_signal(
+    message_decrypt_signal_with_gossip(
         message,
         protocol_address,
         session_store,
@@ -1142,8 +1142,6 @@ async fn SessionCipher_DecryptSignalMessageWithGossip(
         &mut csprng,
     )
     .await
-
-    // decode_and_verify
 }
 
 #[bridge_fn(ffi = "decrypt_pre_key_message")]
